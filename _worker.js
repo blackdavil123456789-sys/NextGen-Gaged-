@@ -35,7 +35,6 @@ async function hmac(secret, text) {
     false,
     ["sign"]
   );
-
   return new Uint8Array(
     await crypto.subtle.sign(
       "HMAC",
@@ -49,7 +48,6 @@ async function makeSession(secret) {
   const payload = b64urlText(
     JSON.stringify({ exp: Date.now() + 86400000 })
   );
-
   return payload + "." + b64url(await hmac(secret, payload));
 }
 
@@ -63,7 +61,6 @@ async function validSession(req, secret) {
   if (parts.length !== 2) return false;
 
   const [payload, sig] = parts;
-
   if (!payload || !sig) return false;
 
   const expected = b64url(await hmac(secret, payload));
@@ -71,18 +68,15 @@ async function validSession(req, secret) {
   if (sig.length !== expected.length) return false;
 
   let diff = 0;
-
   for (let i = 0; i < sig.length; i++) {
     diff |= sig.charCodeAt(i) ^ expected.charCodeAt(i);
   }
-
   if (diff !== 0) return false;
 
   try {
     const data = JSON.parse(
       new TextDecoder().decode(fromB64url(payload))
     );
-
     return Number(data.exp) > Date.now();
   } catch {
     return false;
@@ -96,7 +90,6 @@ function cookie(value, maxAge = 86400) {
 function discount(p) {
   const old = Number(p.old) || 0;
   const price = Number(p.price) || 0;
-
   return old > 0
     ? Math.max(0, Math.round((1 - price / old) * 100))
     : 0;
@@ -115,9 +108,7 @@ function mapProduct(p) {
     image: p.image_url || "",
     video: p.video_url || ""
   };
-
   q.discount = discount(q);
-
   return q;
 }
 
@@ -163,18 +154,14 @@ async function sb(env, path, opts = {}) {
     ...(opts.headers || {})
   };
 
-  const r = await fetch(
-    `${base}/rest/v1/${path}`,
-    {
-      ...opts,
-      headers
-    }
-  );
+  const r = await fetch(`${base}/rest/v1/${path}`, {
+    ...opts,
+    headers
+  });
 
   const text = await r.text();
 
   let data;
-
   try {
     data = JSON.parse(text);
   } catch {
@@ -184,10 +171,7 @@ async function sb(env, path, opts = {}) {
   if (!r.ok) {
     throw new Error(
       typeof data === "object"
-        ? data.message ||
-          data.hint ||
-          data.error ||
-          "Supabase request failed"
+        ? data.message || data.hint || data.error || "Supabase request failed"
         : "Supabase request failed"
     );
   }
@@ -202,12 +186,7 @@ function dataUrlParts(value) {
     /^data:([^;,]+)(?:;[^,]*)?;base64,(.+)$/s
   );
 
-  return m
-    ? {
-        mime: m[1],
-        base64: m[2]
-      }
-    : null;
+  return m ? { mime: m[1], base64: m[2] } : null;
 }
 
 function decodeBase64(s) {
@@ -239,7 +218,6 @@ function extForMime(mime) {
 
 async function uploadMedia(env, dataUrl, prefix) {
   const parts = dataUrlParts(dataUrl);
-
   if (!parts) return dataUrl || "";
 
   const bytes = decodeBase64(parts.base64);
@@ -276,10 +254,7 @@ async function uploadMedia(env, dataUrl, prefix) {
 
   if (!r.ok) {
     const t = await r.text();
-
-    throw new Error(
-      `Media upload failed: ${t.slice(0, 300)}`
-    );
+    throw new Error(`Media upload failed: ${t.slice(0, 300)}`);
   }
 
   return `${base}/storage/v1/object/public/product-media/${name}`;
@@ -287,18 +262,9 @@ async function uploadMedia(env, dataUrl, prefix) {
 
 async function readAll(env) {
   const [products, orders, reviews] = await Promise.all([
-    sb(
-      env,
-      "products?select=*&order=created_at.desc"
-    ),
-    sb(
-      env,
-      "orders?select=*&order=created_at.desc"
-    ),
-    sb(
-      env,
-      "reviews?select=*&order=created_at.desc"
-    )
+    sb(env, "products?select=*&order=created_at.desc"),
+    sb(env, "orders?select=*&order=created_at.desc"),
+    sb(env, "reviews?select=*&order=created_at.desc")
   ]);
 
   return {
@@ -321,13 +287,11 @@ async function body(req) {
 }
 
 function categories(products) {
-  return [
-    ...new Set(
-      products
-        .map(p => p.category)
-        .filter(Boolean)
-    )
-  ];
+  return [...new Set(
+    products
+      .map(p => p.category)
+      .filter(Boolean)
+  )];
 }
 
 function requireAdmin(request, env) {
@@ -344,7 +308,11 @@ export default {
 
     try {
       if (p.startsWith("/api/")) {
-
+        /*
+          IMPORTANT:
+          Supabase configuration is checked at runtime from Worker
+          environment bindings. Never put the service-role key in code.
+        */
         if (
           !env.SUPABASE_URL ||
           !env.SUPABASE_SERVICE_ROLE_KEY
@@ -358,10 +326,7 @@ export default {
           );
         }
 
-        if (
-          p === "/api/health" &&
-          request.method === "GET"
-        ) {
+        if (p === "/api/health" && request.method === "GET") {
           return json({ ok: true });
         }
 
@@ -374,19 +339,14 @@ export default {
 
           if (!pass) {
             return json(
-              {
-                error:
-                  "ADMIN_PASSWORD is not configured"
-              },
+              { error: "ADMIN_PASSWORD is not configured" },
               500
             );
           }
 
           if (String(b.password || "") !== pass) {
             return json(
-              {
-                error: "Wrong password"
-              },
+              { error: "Wrong password" },
               401
             );
           }
@@ -394,13 +354,9 @@ export default {
           const sid = await makeSession(pass);
 
           return json(
-            {
-              ok: true
-            },
+            { ok: true },
             200,
-            {
-              "Set-Cookie": cookie(sid)
-            }
+            { "Set-Cookie": cookie(sid) }
           );
         }
 
@@ -409,13 +365,9 @@ export default {
           request.method === "POST"
         ) {
           return json(
-            {
-              ok: true
-            },
+            { ok: true },
             200,
-            {
-              "Set-Cookie": cookie("", 0)
-            }
+            { "Set-Cookie": cookie("", 0) }
           );
         }
 
@@ -424,8 +376,7 @@ export default {
           request.method === "GET"
         ) {
           return json({
-            authenticated:
-              await requireAdmin(request, env)
+            authenticated: await requireAdmin(request, env)
           });
         }
 
@@ -463,9 +414,7 @@ export default {
             "products?select=*&order=created_at.desc"
           );
 
-          return json(
-            products.map(mapProduct)
-          );
+          return json(products.map(mapProduct));
         }
 
         if (
@@ -474,9 +423,7 @@ export default {
         ) {
           const b = await body(request);
 
-          const productId =
-            String(b.productId || "");
-
+          const productId = String(b.productId || "");
           const quantity = Math.max(
             1,
             Number(b.quantity) || 1
@@ -484,10 +431,7 @@ export default {
 
           if (!productId) {
             return json(
-              {
-                error:
-                  "Product is required"
-              },
+              { error: "Product is required" },
               400
             );
           }
@@ -499,46 +443,29 @@ export default {
 
           if (!products.length) {
             return json(
-              {
-                error:
-                  "Product not found"
-              },
+              { error: "Product not found" },
               404
             );
           }
 
           const product = products[0];
-
-          const price =
-            Number(product.offer_price) || 0;
-
+          const price = Number(product.offer_price) || 0;
           const total = price * quantity;
 
           const code =
             "NGG-" +
-            Date.now()
-              .toString(36)
-              .toUpperCase() +
+            Date.now().toString(36).toUpperCase() +
             "-" +
             Math.random()
               .toString(36)
               .slice(2, 7)
               .toUpperCase();
 
-          const customerName =
-            String(b.name || "").trim();
+          const customerName = String(b.name || "").trim();
+          const phone = String(b.phone || "").trim();
+          const address = String(b.address || "").trim();
 
-          const phone =
-            String(b.phone || "").trim();
-
-          const address =
-            String(b.address || "").trim();
-
-          if (
-            !customerName ||
-            !phone ||
-            !address
-          ) {
+          if (!customerName || !phone || !address) {
             return json(
               {
                 error:
@@ -572,9 +499,8 @@ export default {
             ok: true,
             order: mapOrder(rows[0])
           });
-        }
-
-        if (
+}
+                if (
           p === "/api/reviews" &&
           request.method === "GET"
         ) {
@@ -583,23 +509,16 @@ export default {
             "reviews?select=*&order=created_at.desc"
           );
 
-          return json(
-            reviews.map(mapReview)
-          );
+          return json(reviews.map(mapReview));
         }
 
         if (
           p === "/api/admin/products" &&
           request.method === "GET"
         ) {
-          if (
-            !await requireAdmin(request, env)
-          ) {
+          if (!await requireAdmin(request, env)) {
             return json(
-              {
-                error:
-                  "Unauthorized"
-              },
+              { error: "Unauthorized" },
               401
             );
           }
@@ -609,23 +528,16 @@ export default {
             "products?select=*&order=created_at.desc"
           );
 
-          return json(
-            products.map(mapProduct)
-          );
+          return json(products.map(mapProduct));
         }
 
         if (
           p === "/api/admin/orders" &&
           request.method === "GET"
         ) {
-          if (
-            !await requireAdmin(request, env)
-          ) {
+          if (!await requireAdmin(request, env)) {
             return json(
-              {
-                error:
-                  "Unauthorized"
-              },
+              { error: "Unauthorized" },
               401
             );
           }
@@ -635,23 +547,16 @@ export default {
             "orders?select=*&order=created_at.desc"
           );
 
-          return json(
-            orders.map(mapOrder)
-          );
+          return json(orders.map(mapOrder));
         }
 
         if (
           p === "/api/admin/reviews" &&
           request.method === "GET"
         ) {
-          if (
-            !await requireAdmin(request, env)
-          ) {
+          if (!await requireAdmin(request, env)) {
             return json(
-              {
-                error:
-                  "Unauthorized"
-              },
+              { error: "Unauthorized" },
               401
             );
           }
@@ -661,59 +566,41 @@ export default {
             "reviews?select=*&order=created_at.desc"
           );
 
-          return json(
-            reviews.map(mapReview)
-          );
+          return json(reviews.map(mapReview));
         }
 
         if (
           p === "/api/admin/products" &&
           request.method === "POST"
         ) {
-          if (
-            !await requireAdmin(request, env)
-          ) {
+          if (!await requireAdmin(request, env)) {
             return json(
-              {
-                error:
-                  "Unauthorized"
-              },
+              { error: "Unauthorized" },
               401
             );
           }
 
           const b = await body(request);
 
-          const name =
-            String(b.name || "").trim();
-
+          const name = String(b.name || "").trim();
           if (!name) {
             return json(
-              {
-                error:
-                  "Product name is required"
-              },
+              { error: "Product name is required" },
               400
             );
           }
 
-          const imageUrl =
-            await uploadMedia(
-              env,
-              b.image ||
-                b.imageUrl ||
-                "",
-              "product-image"
-            );
+          const imageUrl = await uploadMedia(
+            env,
+            b.image || b.imageUrl || "",
+            "product-image"
+          );
 
-          const videoUrl =
-            await uploadMedia(
-              env,
-              b.video ||
-                b.videoUrl ||
-                "",
-              "product-video"
-            );
+          const videoUrl = await uploadMedia(
+            env,
+            b.video || b.videoUrl || "",
+            "product-video"
+          );
 
           const rows = await sb(
             env,
@@ -722,190 +609,101 @@ export default {
               method: "POST",
               body: JSON.stringify({
                 name,
-                category: String(
-                  b.cat ||
-                  b.category ||
-                  ""
-                ).trim(),
-                caption: String(
-                  b.caption || ""
-                ).trim(),
-                regular_price:
-                  Number(
-                    b.old ??
-                    b.regular_price
-                  ) || 0,
-                offer_price:
-                  Number(
-                    b.price ??
-                    b.offer_price
-                  ) || 0,
-                stock: String(
-                  b.stock ||
-                  "In Stock"
-                ),
+                category: String(b.cat || b.category || "").trim(),
+                caption: String(b.caption || "").trim(),
+                regular_price: Number(b.old || b.regular_price) || 0,
+                offer_price: Number(b.price || b.offer_price) || 0,
+                stock: String(b.stock || "In Stock"),
                 image_url: imageUrl,
                 video_url: videoUrl,
-                emoji: String(
-                  b.emoji ||
-                  "📦"
-                )
+                emoji: String(b.emoji || "📦")
               })
             }
           );
 
           return json({
             ok: true,
-            product:
-              mapProduct(rows[0])
+            product: mapProduct(rows[0])
           });
         }
 
         const productMatch =
-          p.match(
-            /^\/api\/admin\/products\/([^/]+)$/
-          );
+          p.match(/^\/api\/admin\/products\/([^/]+)$/);
 
         if (
           productMatch &&
-          (
-            request.method === "PUT" ||
+          (request.method === "PUT" ||
             request.method === "PATCH" ||
-            request.method === "DELETE"
-          )
+            request.method === "DELETE")
         ) {
-          if (
-            !await requireAdmin(request, env)
-          ) {
+          if (!await requireAdmin(request, env)) {
             return json(
-              {
-                error:
-                  "Unauthorized"
-              },
+              { error: "Unauthorized" },
               401
             );
           }
 
-          const id =
-            decodeURIComponent(
-              productMatch[1]
-            );
+          const id = decodeURIComponent(productMatch[1]);
 
-          if (
-            request.method === "DELETE"
-          ) {
+          if (request.method === "DELETE") {
             await sb(
               env,
               `products?id=eq.${encodeURIComponent(id)}`,
-              {
-                method: "DELETE"
-              }
+              { method: "DELETE" }
             );
 
-            return json({
-              ok: true
-            });
+            return json({ ok: true });
           }
 
-          const b =
-            await body(request);
-
+          const b = await body(request);
           const patch = {};
 
-          if (
-            b.name !== undefined
-          ) {
-            patch.name =
-              String(b.name).trim();
+          if (b.name !== undefined) {
+            patch.name = String(b.name).trim();
           }
 
-          if (
-            b.cat !== undefined ||
-            b.category !== undefined
-          ) {
-            patch.category =
-              String(
-                b.cat ??
-                b.category ??
-                ""
-              ).trim();
+          if (b.cat !== undefined || b.category !== undefined) {
+            patch.category = String(
+              b.cat ?? b.category ?? ""
+            ).trim();
           }
 
-          if (
-            b.caption !== undefined
-          ) {
-            patch.caption =
-              String(
-                b.caption || ""
-              ).trim();
+          if (b.caption !== undefined) {
+            patch.caption = String(b.caption || "").trim();
           }
 
-          if (
-            b.old !== undefined ||
-            b.regular_price !== undefined
-          ) {
+          if (b.old !== undefined || b.regular_price !== undefined) {
             patch.regular_price =
-              Number(
-                b.old ??
-                b.regular_price
-              ) || 0;
+              Number(b.old ?? b.regular_price) || 0;
           }
 
-          if (
-            b.price !== undefined ||
-            b.offer_price !== undefined
-          ) {
+          if (b.price !== undefined || b.offer_price !== undefined) {
             patch.offer_price =
-              Number(
-                b.price ??
-                b.offer_price
-              ) || 0;
+              Number(b.price ?? b.offer_price) || 0;
           }
 
-          if (
-            b.stock !== undefined
-          ) {
-            patch.stock =
-              String(
-                b.stock ||
-                "In Stock"
-              );
+          if (b.stock !== undefined) {
+            patch.stock = String(b.stock || "In Stock");
           }
 
-          if (
-            b.emoji !== undefined
-          ) {
-            patch.emoji =
-              String(
-                b.emoji ||
-                "📦"
-              );
+          if (b.emoji !== undefined) {
+            patch.emoji = String(b.emoji || "📦");
           }
 
-          if (
-            b.image ||
-            b.imageUrl
-          ) {
-            patch.image_url =
-              await uploadMedia(
-                env,
-                b.image ||
-                  b.imageUrl,
-                "product-image"
-              );
+          if (b.image || b.imageUrl) {
+            patch.image_url = await uploadMedia(
+              env,
+              b.image || b.imageUrl,
+              "product-image"
+            );
           }
 
-          if (
-            b.video ||
-            b.videoUrl
-          ) {
-            patch.video_url =
-              await uploadMedia(
-                env,
-                b.video ||
-                  b.videoUrl,
-                "product-video"
-              );
+          if (b.video || b.videoUrl) {
+            patch.video_url = await uploadMedia(
+              env,
+              b.video || b.videoUrl,
+              "product-video"
+            );
           }
 
           const rows = await sb(
@@ -913,41 +711,160 @@ export default {
             `products?id=eq.${encodeURIComponent(id)}`,
             {
               method: "PATCH",
-              body:
-                JSON.stringify(patch)
+              body: JSON.stringify(patch)
             }
           );
 
           return json({
             ok: true,
-            product:
-              rows[0]
-                ? mapProduct(rows[0])
-                : null
+            product: rows[0] ? mapProduct(rows[0]) : null
           });
         }
 
         const orderMatch =
-          p.match(
-            /^\/api\/admin\/orders\/([^/]+)$/
-          );
+          p.match(/^\/api\/admin\/orders\/([^/]+)$/);
 
         if (
           orderMatch &&
-          (
-            request.method === "PUT" ||
+          (request.method === "PUT" ||
             request.method === "PATCH" ||
-            request.method === "DELETE"
-          )
+            request.method === "DELETE")
         ) {
-          if (
-            !await requireAdmin(request, env)
-          ) {
+          if (!await requireAdmin(request, env)) {
             return json(
-              {
-                error:
-                  "Unauthorized"
-              },
+              { error: "Unauthorized" },
               401
             );
- 
+          }
+
+          const id = decodeURIComponent(orderMatch[1]);
+
+          if (request.method === "DELETE") {
+            await sb(
+              env,
+              `orders?id=eq.${encodeURIComponent(id)}`,
+              { method: "DELETE" }
+            );
+
+            return json({ ok: true });
+          }
+
+          const b = await body(request);
+          const patch = {};
+
+          if (b.status !== undefined) {
+            patch.status = String(b.status || "Pending");
+          }
+
+          if (b.step !== undefined) {
+            patch.step = Number(b.step) || 0;
+          }
+
+          if (b.name !== undefined) {
+            patch.customer_name = String(b.name || "").trim();
+          }
+
+          if (b.phone !== undefined) {
+            patch.phone = String(b.phone || "").trim();
+          }
+
+          if (b.address !== undefined) {
+            patch.address = String(b.address || "").trim();
+          }
+
+          if (b.quantity !== undefined || b.qty !== undefined) {
+            patch.quantity =
+              Math.max(1, Number(b.quantity ?? b.qty) || 1);
+          }
+
+          if (Object.keys(patch).length === 0) {
+            return json({ ok: true });
+          }
+
+          const rows = await sb(
+            env,
+            `orders?id=eq.${encodeURIComponent(id)}`,
+            {
+              method: "PATCH",
+              body: JSON.stringify(patch)
+            }
+          );
+
+          return json({
+            ok: true,
+            order: rows[0] ? mapOrder(rows[0]) : null
+          });
+        }
+                const reviewMatch =
+          p.match(/^\/api\/admin\/reviews\/([^/]+)$/);
+
+        if (
+          reviewMatch &&
+          (request.method === "PUT" ||
+            request.method === "PATCH" ||
+            request.method === "DELETE")
+        ) {
+          if (!await requireAdmin(request, env)) {
+            return json(
+              { error: "Unauthorized" },
+              401
+            );
+          }
+
+          const id = decodeURIComponent(reviewMatch[1]);
+
+          if (request.method === "DELETE") {
+            await sb(
+              env,
+              `reviews?id=eq.${encodeURIComponent(id)}`,
+              { method: "DELETE" }
+            );
+
+            return json({ ok: true });
+          }
+
+          const b = await body(request);
+          const patch = {};
+
+          if (b.name !== undefined) {
+            patch.name = String(b.name || "").trim();
+          }
+
+          if (b.rating !== undefined) {
+            patch.rating = Number(b.rating) || 5;
+          }
+
+          if (b.text !== undefined) {
+            patch.text = String(b.text || "").trim();
+          }
+
+          const rows = await sb(
+            env,
+            `reviews?id=eq.${encodeURIComponent(id)}`,
+            {
+              method: "PATCH",
+              body: JSON.stringify(patch)
+            }
+          );
+
+          return json({
+            ok: true,
+            review: rows[0] ? mapReview(rows[0]) : null
+          });
+        }
+
+        return json(
+          { error: "API route not found" },
+          404
+        );
+      }
+
+      return env.ASSETS.fetch(request);
+    } catch (e) {
+      return json(
+        { error: e?.message || "Server error" },
+        500
+      );
+    }
+  }
+};
