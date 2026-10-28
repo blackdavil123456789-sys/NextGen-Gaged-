@@ -300,7 +300,6 @@ function requireAdmin(request, env) {
     String(env.ADMIN_PASSWORD || "")
   );
 }
-
 export default {
   async fetch(request, env) {
     const u = new URL(request.url);
@@ -308,11 +307,6 @@ export default {
 
     try {
       if (p.startsWith("/api/")) {
-        /*
-          IMPORTANT:
-          Supabase configuration is checked at runtime from Worker
-          environment bindings. Never put the service-role key in code.
-        */
         if (
           !env.SUPABASE_URL ||
           !env.SUPABASE_SERVICE_ROLE_KEY
@@ -378,6 +372,21 @@ export default {
           return json({
             authenticated: await requireAdmin(request, env)
           });
+        }
+
+        // Admin dashboard data — requires a valid session
+        if (
+          p === "/api/admin/data" &&
+          request.method === "GET"
+        ) {
+          if (!await requireAdmin(request, env)) {
+            return json(
+              { error: "Unauthorized" },
+              401
+            );
+          }
+
+          return json(await readAll(env));
         }
 
         if (
@@ -499,8 +508,9 @@ export default {
             ok: true,
             order: mapOrder(rows[0])
           });
-}
-                if (
+        }
+
+        if (
           p === "/api/reviews" &&
           request.method === "GET"
         ) {
@@ -567,9 +577,8 @@ export default {
           );
 
           return json(reviews.map(mapReview));
-        }
-
-        if (
+      }
+                 if (
           p === "/api/admin/products" &&
           request.method === "POST"
         ) {
@@ -795,7 +804,8 @@ export default {
             order: rows[0] ? mapOrder(rows[0]) : null
           });
         }
-                const reviewMatch =
+
+        const reviewMatch =
           p.match(/^\/api\/admin\/reviews\/([^/]+)$/);
 
         if (
